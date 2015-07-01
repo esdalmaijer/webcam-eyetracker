@@ -5,7 +5,7 @@ version 0.1.2 (12-Oct-2013)
 
 
 Software developed by Edwin Dalmaijer. For more information on the inner
-workings of the pupil tracker, please read [this page](http://www.pygaze.org/projects/eyetracker/). This module
+workings of the pupil tracker, please read [this page](http://www.pygaze.org/2015/06/webcam-eye-tracker/). This module
 is built on top of PyGame, and is part of the PyGaze project. Please note
 that maintenance is slow, as this is a hobby and work often gets in the
 way of those ;)
