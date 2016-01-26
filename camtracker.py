@@ -16,6 +16,17 @@ BUFFSEP = 'edwinisdebeste'
 
 import os.path
 
+# Try to import VideoCapture Library
+# Requires VideoCapture & PIL libraries
+vcAvailable = False
+import imp
+try:
+  imp.find_module('VideoCapture')
+  vcAvailable = True
+  import VideoCapture
+except ImportError:
+  print "VideoCapture module not available"
+
 try:
 	import pygame
 	import pygame.camera
@@ -779,18 +790,22 @@ class CamEyeTracker:
 						(640,480) (default = (640,480))
 		"""
 
-		# select a device if none was selected
-		if device == None:
-			available = available_devices()
-			if available == []:
-				raise Exception("Error in camtracker.CamEyeTracker.__init__: no available camera devices found (did you forget to plug it in?)")
-			else:
-				device = available[0]
-		
-		# start the webcam
-		self.cam = pygame.camera.Camera(device, camres, 'RGB')
-		self.cam.start()
-		
+		global vcAvailable
+		if vcAvailable == False:
+			# select a device if none was selected
+			if device == None:
+				available = available_devices()
+				if available == []:
+					raise Exception("Error in camtracker.CamEyeTracker.__init__: no available camera devices found (did you forget to plug it in?)")
+				else:
+					device = available[0]
+			
+			# start the webcam
+			self.cam = pygame.camera.Camera(device, camres, 'RGB')
+			self.cam.start()
+		else:
+			self.cam = VideoCapture.Device()
+			
 		# get the webcam resolution (get_size not available on all systems)
 		try:
 			self.camres = self.cam.get_size()
@@ -822,7 +837,6 @@ class CamEyeTracker:
 		imgsize		--	a (width,height) tuple indicating the size
 						of the images produced by the webcam
 		"""
-		
 		return self.camres
 
 	
@@ -840,8 +854,15 @@ class CamEyeTracker:
 		snapshot		--	a pygame.surface.Surface instance,
 						containing a snapshot taken with the webcam
 		"""
-		
-		return self.cam.get_image()
+		global vcAvailable
+		if vcAvailable:
+			image = self.cam.getImage()
+			mode = image.mode
+			size = image.size
+			data = image.tostring()
+			return pygame.image.fromstring(data, size, mode)
+		else:
+			return self.cam.get_image()
 		
 		
 	def threshold_image(self, image):
