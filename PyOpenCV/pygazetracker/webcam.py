@@ -247,7 +247,7 @@ class WebCamTracker:
 			x, y, w, h = eyes[ri]
 			right = facecrop[y:y+h, x:x+w]
 
-		return success, [right, left]
+		return success, [left, right]
 
 
 # # # # #
@@ -256,14 +256,19 @@ if __name__ == u'__main__':
 	import os
 	import time
 	from matplotlib import pyplot
-	filepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), u'test.jpeg')
+#	filepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), u'test.jpeg')
 	tracker = WebCamTracker()
-	img = cv2.imread(filepath)
-	grey = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-	t0 = time.time()
-	success, facecrop = tracker._crop_face(grey)
-	success, eyes = tracker._crop_eyes(facecrop)
+#	img = cv2.imread(filepath)
+#	frame = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+	success = False
+	while not success:
+		t0 = time.time()
+		success, frame = tracker._get_frame()
+	if success:
+		success, facecrop = tracker._crop_face(frame)
+		success, eyes = tracker._crop_eyes(facecrop)
 	t1 = time.time()
+	tracker.close()
 	print("Elapsed time: %.3f ms" % (1000*(t1-t0)))
 	pyplot.figure(); pyplot.imshow(facecrop, cmap='gray')
 	pyplot.figure(); pyplot.imshow(eyes[0], cmap='gray')
