@@ -123,7 +123,7 @@ if __name__ == u'__main__':
 	DUMMY = True
 
 	# Initialise a new tracker instance.
-	tracker = WebCamTracker()
+	tracker = WebCamTracker(debug=True)
 
 	# In DUMMY mode, load an existing image (useful for quick debugging).
 	if DUMMY:
@@ -150,8 +150,11 @@ if __name__ == u'__main__':
 			success, frame = tracker._get_frame(mode=MODE)
 
 	# Crop the face and the eyes from the image.
-	success, facecrop = tracker._crop_face(frame)
-	success, eyes = tracker._crop_eyes(facecrop)
+	success, facecrop = tracker._crop_face(frame, minsize=(30, 30))
+	success, eyes = tracker._crop_eyes(facecrop, \
+		Lexpect=(0.7,0.4), Rexpect=(0.3,0.4), maxdist=None, maxsize=None)
+	# Find the pupils in both eyes
+	B = tracker._find_pupils(eyes[0], eyes[1], glint=True, mode='diameter')
 	t1 = time.time()
 
 	# Close the connection with the tracker.

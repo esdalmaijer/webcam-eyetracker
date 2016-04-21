@@ -16,6 +16,8 @@ _VERBOSITY = 2
 # FILES AND FOLDERS
 # Get the main directory
 _DIR = os.path.abspath(os.path.dirname(__file__)).decode(u'utf-8')
+# Get the directory for DEBUG images.
+_DEBUGDIR = os.path.join(_DIR, 'DEBUG')
 # Face detection cascade from:
 # https://github.com/shantnu/FaceDetect
 _FACECASCADE = os.path.join(_DIR, u'haarcascade_frontalface_default.xml')

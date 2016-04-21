@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 
-from __init__ import _message, _EYECASCADE, _FACECASCADE
+from __init__ import _message, _DEBUGDIR, _EYECASCADE, _FACECASCADE
 
 import cv2
 import numpy
+from scipy import ndimage
 
 
 class EyeTracker:
@@ -14,7 +15,8 @@ class EyeTracker:
 	series of images.
 	"""
 	
-	def __init__(self, pupthreshold=50, glintthreshold=200, **kwargs):
+	def __init__(self, pupthreshold=50, glintthreshold=200, debug=False, \
+		**kwargs):
 		
 		"""Initialises an EyeTracker class.
 		
@@ -29,6 +31,11 @@ class EyeTracker:
 						luminance value is that is still considered
 						to be part of the glint. This value needs to
 						be between 0 and 255. Default = 200.
+		
+		debug			-	A Boolean that indicates whether DEBUG mode
+						is active. In DEBUG mode, images from all
+						stages of the pupil-extraction process will
+						be stored.
 		"""
 		
 		# Set some settings for pupil detection.
@@ -41,6 +48,14 @@ class EyeTracker:
 		# http://docs.opencv.org/3.1.0/d7/d8b/tutorial_py_face_detection.html
 		self._face_cascade = cv2.CascadeClassifier(_FACECASCADE)
 		self._eye_cascade = cv2.CascadeClassifier(_EYECASCADE)
+		
+		# In DEBUG mode, create a Matplotlib figure.
+		if debug:
+			import os
+			from matplotlib import patches, pyplot
+			global os, patches, pyplot
+			self._debug = debug
+			self._fig, self._ax = pyplot.subplots(nrows=2, ncols=3)
 		
 		# Run the custom initialisation procedure.
 		self._connected = False
@@ -160,6 +175,18 @@ class EyeTracker:
 			for i in range(len(faces)):
 				if faces[i][3] > lh:
 					x, y, w, h = faces[i]
+
+		# In DEBUG mode, draw the original frame and the detected faces.
+		if self._debug:
+			# Display the frame in the top-left pane.
+			self._ax[0][0].set_title("potential faces")
+			self._ax[0][0].imshow(frame, cmap='gray')
+			for i in range(len(faces)):
+				r = faces[i]
+				self._ax[0][0].add_patch(patches.Rectangle( \
+					(r[0],r[1]), r[2], r[3], fill=False, linewidth=1))
+			self._ax[0][0].add_patch(patches.Rectangle( \
+				(r[0],r[1]), r[2], r[3], fill=False, linewidth=3))
 		
 		# Return the cropped frame.
 		return success, frame[y:y+h, x:x+w]
@@ -282,20 +309,230 @@ class EyeTracker:
 			left = None
 		else:
 			x, y, w, h = eyes[li]
+			y += h/4
+			h /= 2
 			left = facecrop[y:y+h, x:x+w]
 		# If the right eye was detected, crop it from the face.
 		if ri == None:
 			right = None
 		else:
 			x, y, w, h = eyes[ri]
+			y += h/4
+			h /= 2
 			right = facecrop[y:y+h, x:x+w]
+
+		# In DEBUG mode, draw the original frame and the detected eyes.
+		if self._debug:
+			# Display the face in the bottom-left pane.
+			self._ax[1][0].imshow(facecrop, cmap='gray')
+			self._ax[1][0].set_title("potential eyes")
+			for i in range(len(eyes)):
+				r = eyes[i]
+				if i == li or i == ri:
+					self._ax[1][0].add_patch(patches.Rectangle( \
+						(r[0],r[1]), r[2], r[3], fill=False, \
+						linewidth=3))
+				else:
+					self._ax[1][0].add_patch(patches.Rectangle( \
+						(r[0],r[1]), r[2], r[3], fill=False, \
+						linewidth=1))
 
 		return success, [left, right]
 	
 	
-	def _find_pupils(self, eyeimg, glint=True):
+	def _find_pupils(self, left, right, glint=True, mode='diameter'):
 		
-		"""Finds the pupil in an image of an eye.
+		"""Finds the pupils and the glints in image of the left and the
+		right eye, and returns the relevant parameters. Parameters that
+		cannot be found will be None.
+		
+		Arguments
+		
+		left			-	A numpy.ndarray with unsigned, 8-bit
+						integers that reflect the greyscale values
+						of what is assumed to be the left eye.
+		
+		right			-	A numpy.ndarray with unsigned, 8-bit
+						integers that reflect the greyscale values
+						of what is assumed to be the right eye.
+		
+		Keyword Arguments
+		
+		glint			-	A Boolean that indicates whether the glint
+						(the corneal reflection) should also be
+						detected. Default = True.
+		
+		mode			-	A string that indicates how the pupil size
+						should be reported.
+						'diameter' reports the width of the rect in
+						which the thresholded pupil fits
+		
+		Returns
+		[L, R]		-	A NumPy array that contains the following:
+		L = [px, py, ps, gx, gy]
+		R = [px, py, ps, gx, gy]
+					-	px is an integer indicating the pupil's
+						likely horizontal position within the image.
+						py is an integer indicating the pupil's
+						likely vertical position within the image.
+						ps is an integer indicating the pupil's
+						size in pixels. The size reflects the width
+						of the rect in which the pupil falls when
+						mode=='diameter', or the total amount of
+						thresholded pixels when mode'surface'.
+						gx is an integer indicating the pupil's
+						likely horizontal position within the image.
+						gy is an integer indicating the pupil's
+						likely vertical position within the image.
+						All of these values can be None if they
+						could not be obtained.
 		"""
 		
-		pass
+		# Create an empty list to hold values for each of the eyes.
+		B = numpy.zeros((2, 5))
+		i = 0
+		for eyeimg in [left, right]:
+			if eyeimg == None:
+				B[i,:] *= numpy.NaN
+			else:
+				B[i,:] = self._process_eye_image(eyeimg, glint=True, \
+					mode='diameter', debugindex=i)
+			i += 1
+		
+		# In DEBUG mode, save and reset the image.
+		if self._debug:
+			# Remove all axes' ticklabels
+			for i in range(len(self._ax)):
+				for j in range(len(self._ax[i])):
+					self._ax[i][j].set_xticklabels([])
+					self._ax[i][j].set_yticklabels([])
+			# Save and close the figure.
+			if not os.path.isdir(_DEBUGDIR):
+				os.mkdir(_DEBUGDIR)
+			f = unicode(len(os.listdir(_DEBUGDIR))).zfill(8)
+			self._fig.savefig(os.path.join(_DEBUGDIR, u'%s.jpg' % (f)))
+			pyplot.close(self._fig)
+			# Reset the variables.
+			self._fig, self._ax = pyplot.subplots(nrows=2, ncols=3)
+		
+		return B
+	
+	
+	def _process_eye_image(self, eyeimg, glint=True, mode='diameter', \
+		debugindex=None):
+		
+		"""Finds the pupil and the glint in a single image of an eye, and
+		returns the relevant parameters. Parameters that cannot be found
+		will be None.
+		
+		Arguments
+		
+		eyeimg		-	A numpy.ndarray with unsigned, 8-bit
+						integers that reflect the greyscale values
+						of what is assumed to be an eye.
+		
+		Keyword Arguments
+		
+		glint			-	A Boolean that indicates whether the glint
+						(the corneal reflection) should also be
+						detected. Default = True.
+		
+		mode			-	A string that indicates how the pupil size
+						should be reported.
+						'diameter' reports the width of the rect in
+						which the thresholded pupil fits
+		
+		Returns
+		[px, py, ps, gx, gy]
+					-	px is an integer indicating the pupil's
+						likely horizontal position within the image.
+						py is an integer indicating the pupil's
+						likely vertical position within the image.
+						ps is an integer indicating the pupil's
+						size in pixels. The size reflects the width
+						of the rect in which the pupil falls when
+						mode=='diameter', or the total amount of
+						thresholded pixels when mode'surface'.
+						gx is an integer indicating the pupil's
+						likely horizontal position within the image.
+						gy is an integer indicating the pupil's
+						likely vertical position within the image.
+						All of these values can be None if they
+						could not be obtained.
+		"""
+		
+		# PUPIL
+		# Create masks using the pupil (dark) and glint (light) luminance
+		# thresholds.
+		mask = {'p':eyeimg < self._pupt}
+		if glint:
+			# Create a mask using the pupil luminance threshold.
+			mask['g'] = eyeimg > self._glit
+		
+		# Go through both masks, and save the extracted values.
+		v = {'px':None, 'py':None, 'ps':None, 'gx':None, 'gy':None}
+		for m in mask.keys():
+	
+			# Get connected components. The first component (comp==0) is
+			# the background, and the others are connected components
+			# without an ordering that's useful to us. The pupil will be
+			# the largest component, so we will need to find that.
+			comp, ncomp = ndimage.label(mask[m])
+
+			# In DEBUG mode, draw the thresholded components.
+			if self._debug and m == 'p':
+				# Display the components in the central top/bottom pane.
+				self._ax[debugindex][1].imshow(comp, cmap='jet')
+				self._ax[debugindex][1].set_title("dark components")
+			
+			# Only proceed if there is more than one connected component
+			# (if there is only one, that's just the background).
+			if ncomp > 1:
+				# Find the largest component (we assume this is the
+				# pupil).
+				pupcomp = 1
+				compsum = 0
+				for i in range(1, ncomp+1):
+					s = numpy.sum(comp==i)
+					if s >= compsum:
+						compsum = s
+						pupcomp = i
+				# Fill in the gaps in the imperfect thresholding, to
+				# better estimate the pupil area.
+				pup = ndimage.binary_closing(comp==pupcomp).astype(int)
+				# Get all points that are within the pupil as (y,x)
+				# coordinates.
+				coords = numpy.column_stack(numpy.nonzero(pup))
+				# Extra check to see whether there are two or more
+				# coordinates.
+				if coords.shape[0] > 1:
+					# Find the rect that encapsulates the pupil.
+					x, y = coords[:,1].min(), coords[:,0].min()
+					v['%ss' % (m)], h = coords[:,1].max() - x, \
+						coords[:,0].max() - y
+					v['%sx' % (m)] = x + v['%ss' % (m)]/2
+					v['%sy' % (m)] = y + h/2
+					# If required, calculate the pupil surface.
+					if m == 'p' and mode == 'surface':
+						v['%ss' % (m)] = numpy.sum(pup)
+
+					# In DEBUG mode, colour the detected pupil, and draw a
+					# draw a frame around it.
+					if self._debug and m == 'p':
+						# Create an RGB image from the grey image.
+						img = numpy.dstack([eyeimg,eyeimg,eyeimg])
+						# Colour the thresholded pupil blue.
+						img[:,:,0][pup==1] = img[:,:,0][pup==1]/2
+						img[:,:,1][pup==1] = img[:,:,1][pup==1]/2
+						img[:,:,2][pup==1] = img[:,:,2][pup==1]/2 + 255/2
+						# Display the detected pupil in the right
+						# top/bottom pane.
+						self._ax[debugindex][2].imshow(img)
+						self._ax[debugindex][2].set_title("detected pupil")
+						# Draw a green rectangle around the pupil.
+						self._ax[debugindex][2].add_patch(patches.Rectangle( \
+							(x-1,y-1), v['ps']+2, h+2, edgecolor=(0,1,0),
+							fill=False, linewidth=1))
+		
+		return v['px'], v['py'], v['ps'], v['gx'], v['gy']
+		
