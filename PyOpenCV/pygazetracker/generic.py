@@ -50,11 +50,11 @@ class EyeTracker:
 		self._eye_cascade = cv2.CascadeClassifier(_EYECASCADE)
 		
 		# In DEBUG mode, create a Matplotlib figure.
-		if debug:
+		self._debug = debug
+		if self._debug:
 			import os
 			from matplotlib import patches, pyplot
 			global os, patches, pyplot
-			self._debug = debug
 			self._fig, self._ax = pyplot.subplots(nrows=2, ncols=3)
 		
 		# Run the custom initialisation procedure.
