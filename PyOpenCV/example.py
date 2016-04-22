@@ -27,7 +27,7 @@ if __name__ == u'__main__':
 	REXPECT = (0.3,0.4)
 	MAXPUPDIST = 0.2
 	MAXPUPSIZE = 0.3
-	MAXCPU = 12
+	MAXCPU = 6
 	
 	# WEBCAM
 	CAMNR = 0

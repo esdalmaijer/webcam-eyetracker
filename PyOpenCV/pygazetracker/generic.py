@@ -525,7 +525,7 @@ class EyeTracker:
 					samplelist.append(sample[1])
 					# Store the sample locally, but only if it's not
 					# a message.
-					if sample[1][0][0] != ['MSG']:
+					if sample[1][0][0] != 'MSG':
 						self._latest_sample = sample
 				
 				# Write the oldest samples from the list, but make sure
