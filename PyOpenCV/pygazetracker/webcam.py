@@ -34,33 +34,13 @@ class WebCamTracker(EyeTracker):
 				u"Successfully disconnected from webcam.")
 	
 	
-	def connect(self, camnr=0):
+	def connect(self, camnr=0, mode='RGB', **kwargs):
 		
 		"""Use this function to implement the initialisation of a specific
 		type of eye tracking.
-		"""
 		
-		# Only initialise if it hasn't been done yet.
-		if not self._connected:
-
-			# DEBUG message.
-			_message(u'debug', u'webcam.WebCamTracker.connect', \
-				u"Connecting to webcam %d." %(camnr))
-		
-			# Initialise the webcam.
-			self._vidcap = cv2.VideoCapture(camnr)
-			self._connected = True
-
-			# DEBUG message.
-			_message(u'debug', u'webcam.WebCamTracker.connect', \
-				u"Successfully connected to webcam %d!" %(camnr))
-
-	
-	def _get_frame(self, mode='RGB'):
-		
-		"""Reads the next frame from the active OpenCV VideoCapture.
-		
-		Keyword Arguments
+		camnr			-	Integer that indicates what webcam should be
+						used. Default = 0.
 		
 		mode			-	String that indicates how the captured frame
 						should be processed before it's returned.
@@ -68,7 +48,34 @@ class WebCamTracker(EyeTracker):
 						'G' returns the green component of the frame,
 						'B' returns the blue component of the frame,
 						'RGB' returns the greyscale version of the
-						frame (converted by OpenCV).
+						frame (converted by OpenCV). Default = 'RGB'.
+		"""
+		
+		# Only initialise if it hasn't been done yet.
+		if not self._connected:
+			
+			# Set mode and camera number
+			self._camnr = camnr
+			self._mode = mode
+
+			# DEBUG message.
+			_message(u'debug', u'webcam.WebCamTracker.connect', \
+				u"Connecting to webcam %d." % (self._camnr))
+		
+			# Initialise the webcam.
+			self._vidcap = cv2.VideoCapture(self._camnr)
+			self._connected = True
+
+			# DEBUG message.
+			_message(u'debug', u'webcam.WebCamTracker.connect', \
+				u"Successfully connected to webcam %d!" % (self._camnr))
+
+	
+	def _get_frame(self):
+		
+		"""Reads the next frame from the active OpenCV VideoCapture.
+		
+		Keyword Arguments
 		
 		Returns
 		
@@ -89,21 +96,22 @@ class WebCamTracker(EyeTracker):
 		# If a new frame was available, proceed to process and return it.		
 		if ret:
 			# Return the red component of the obtained frame.
-			if mode == 'R':
+			if self._mode == 'R':
 				return ret, frame[:,:,2]
 			# Return the green component of the obtained frame.
-			elif mode == 'G':
+			elif self._mode == 'G':
 				return ret, frame[:,:,1]
 			# Return the blue component of the obtained frame.
-			elif mode == 'B':
+			elif self._mode == 'B':
 				return ret, frame[:,:,0]
 			# Convert to grey.
-			elif mode == 'RGB':
+			elif self._mode == 'RGB':
 				return ret, cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 			# Throw an exception if the mode can't be recognised.
 			else:
 				_message(u'error', u'webcam.WebCamTracker._get_frame', \
-					u"Mode '%s' not recognised. Supported modes: 'R', 'G', 'B', or 'RGB'.")
+					u"Mode '%s' not recognised. Supported modes: 'R', 'G', 'B', or 'RGB'." \
+					% (self._mode))
 		
 		# If a new frame wasn't available, return None.
 		else:
@@ -121,9 +129,10 @@ if __name__ == u'__main__':
 	# Constants
 	MODE = 'B'
 	DUMMY = True
+	DEBUG = False
 
 	# Initialise a new tracker instance.
-	tracker = WebCamTracker(debug=True)
+	tracker = WebCamTracker(debug=DEBUG)
 
 	# In DUMMY mode, load an existing image (useful for quick debugging).
 	if DUMMY:
