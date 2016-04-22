@@ -4,7 +4,7 @@ from __init__ import _message, _DEBUG, _DEBUGDIR, _EYECASCADE, _FACECASCADE
 
 import time
 from threading import Thread
-from multiprocessing import cpu_count, Lock, Process, Queue
+from multiprocessing import cpu_count, Event, Lock, Process, Queue
 
 import cv2
 import numpy
@@ -151,6 +151,12 @@ class EyeTracker:
 		self._glintdetect = glintdetect
 		self._pupsizemode = pupsizemode
 		
+		# ALIVE EVENT
+		# This event signals whether the tracker is still alive. It should
+		# only be cleared when closing the connection to the tracker!
+		self._alive = Event()
+		self._alive.set()
+		
 		# FRAME OBTAINING THREAD
 		# Boolean that turns to True when a connection with the source of
 		# frames has been established.
@@ -167,7 +173,7 @@ class EyeTracker:
 		_message(u'debug', u'generic.EyeTracker.__init__', \
 			u"Starting a Thread to obtain frames.")
 		self._frame_obtainer_thread = Thread(target=self._frame_obtainer, \
-			args=[self._framequeue])
+			args=[self._alive, self._framequeue])
 		self._frame_obtainer_thread.name = u'frame_obtainer'
 		self._frame_obtainer_thread.daemon = True
 		self._frame_obtainer_thread.start()
@@ -187,10 +193,11 @@ class EyeTracker:
 		self._frame_processes = []
 		for i in range(1, cpus):
 			p = Process(target=_frame_processer, \
-				args=[self._framequeue, self._samplequeue, self._pupt, \
-				self._glit, self._facedetect, self._minfacesize, \
-				self._Lexpect, self._Rexpect, self._maxpupdist, \
-				self._maxpupsize, self._glintdetect, self._pupsizemode])
+				args=[self._alive, self._framequeue, self._samplequeue, \
+				self._pupt, self._glit, self._facedetect, \
+				self._minfacesize, self._Lexpect, self._Rexpect, \
+				self._maxpupdist, self._maxpupsize, self._glintdetect, \
+				self._pupsizemode])
 			p.name = u'frame_processor_%d' % (i)
 			p.daemon = True
 			p.start()
@@ -233,7 +240,7 @@ class EyeTracker:
 			u"Starting a Thread to log samples to file '%s'." \
 			% (self._logfilename))
 		self._sample_logging_thread = Thread(target=self._sample_logger, \
-			args=[self._samplequeue])
+			args=[self._alive, self._samplequeue])
 		self._sample_logging_thread.name = u'sample_logger'
 		self._sample_logging_thread.daemon = True
 		self._sample_logging_thread.start()
@@ -243,7 +250,7 @@ class EyeTracker:
 		self.connect(**kwargs)
 	
 	
-	def close(self):
+	def close(self, **kwargs):
 		
 		"""Use this function to implement the ending of a specific type
 		of eye tracking.
@@ -251,9 +258,26 @@ class EyeTracker:
 		
 		# Only close the connection EyeTracker if it isn't closed yet.
 		if self._connected:
+
+			# Signal the _frame_obtainer that the tracker isn't connected
+			# anymore.
 			self._connected = False
-		
-		# CUSTOM IMPLEMENTATION HERE
+			
+			# Signal all Threads and Processes that they should stop.
+			self._alive.clear()
+			
+			# Wait for all frame-processing Processes to join.
+			for p in self._frame_processes:
+				p.join()
+			
+			# Wait for the frame-obtaining Thread to join.
+			self._frame_obtainer_thread.join()
+			
+			# Wait for the logging Thread to join.
+			self._sample_logging_thread.join()
+			
+			# Call the custom closing implementation.
+			self._close(**kwargs)
 	
 	
 	def connect(self, **kwargs):
@@ -264,6 +288,8 @@ class EyeTracker:
 		
 		# Only intialise the EyeTracker if it isn't initialised yet.
 		if not self._connected:
+			
+			# Signal the frame obtainer that we are connected!
 			self._connected = True
 		
 			# CUSTOM IMPLEMENTATION HERE
@@ -407,10 +433,25 @@ class EyeTracker:
 		"""
 		
 		# Obtain a frame.
-		_message(u'message', u'generic.EyeTracker.get_frame', \
+		_message(u'message', u'generic.EyeTracker._get_frame', \
 			u"Implement your own _get_frame functionality")
 		
 		return False, None
+
+	
+	def _close(self, **kwargs):
+		
+		"""Use this function to implement the specifics of closing a
+		connection in your eye-tracking implementation. You could, for
+		example, use it to close the connection to a webcam. This function
+		is automatically called when the close() method is passed, and this
+		setup allows you to pass your own keyword arguments to close (which
+		will then be passed on to _close).
+		"""
+		
+		# CUSTOM IMPLEMENTATION HERE
+		_message(u'message', u'generic.EyeTracker._close', \
+			u"Implement your own _close functionality")
 
 	
 	# # # # # #
@@ -465,14 +506,14 @@ class EyeTracker:
 	# RUNNING PROCESSES #
 	# # # # # # # # # # #
 	
-	def _frame_obtainer(self, framequeue):
+	def _frame_obtainer(self, event, framequeue):
 		
 		"""Continuously tries to get new frames using self._get_frame, and
 		puts the obtained frames in the framequeue.
 		"""
 		
 		# Continuously run.
-		while True:
+		while event.is_set():
 			
 			# Only try to get frames if a connection is established.
 			if self._connected:
@@ -498,7 +539,7 @@ class EyeTracker:
 				time.sleep(0.01)
 	
 	
-	def _sample_logger(self, samplequeue):
+	def _sample_logger(self, event, samplequeue):
 		
 		"""Continuously monitors the Queue, and writes samples to the log
 		file whenever over five are still in the Queue.
@@ -509,7 +550,7 @@ class EyeTracker:
 		samplelist = []
 		
 		# Continuously run.
-		while True:
+		while event.is_set():
 			
 			# Only process samples if the tracker is recording.
 			if self._recording:
@@ -578,9 +619,9 @@ class EyeTracker:
 # depend on how quick we can poll the webcam AND how quick we could then
 # process the webcam's image.
 
-def _frame_processer(framequeue, samplequeue, pupthreshold, glintthreshold, \
-	facedetect, minfacesize, Lexpect, Rexpect, maxpupdist, maxpupsize, \
-	glintdetect, pupsizemode):
+def _frame_processer(event, framequeue, samplequeue, pupthreshold, \
+	glintthreshold, facedetect, minfacesize, Lexpect, Rexpect, maxpupdist, \
+	maxpupsize, glintdetect, pupsizemode):
 	
 	"""Continuously obtains frames from the framequeue, processes them into
 	samples, and puts those samples in the samplequeue.
@@ -606,7 +647,7 @@ def _frame_processer(framequeue, samplequeue, pupthreshold, glintthreshold, \
 	eye_cascade = cv2.CascadeClassifier(_EYECASCADE)
 	
 	# Continuously run.
-	while True:
+	while event.is_set():
 
 		# Only look for frames if the Queue isn't empty.
 		if not framequeue.empty():

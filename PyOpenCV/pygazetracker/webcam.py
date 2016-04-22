@@ -13,27 +13,6 @@ class WebCamTracker(EyeTracker):
 	"""
 	
 	
-	def close(self):
-		
-		"""Closes the connection to the OpenCV VideoCapture.
-		"""
-		
-		# Only close if there is an open connection.
-		if self._connected:
-
-			# DEBUG message.
-			_message(u'debug', u'webcam.WebCamTracker.close', \
-				u"Disconnecting from webcam.")
-
-			# Release the video capture from the current webcam.
-			self._vidcap.release()
-			self._connected = False
-
-			# DEBUG message.
-			_message(u'debug', u'webcam.WebCamTracker.close', \
-				u"Successfully disconnected from webcam.")
-	
-	
 	def connect(self, camnr=0, mode='RGB', **kwargs):
 		
 		"""Use this function to implement the initialisation of a specific
@@ -116,6 +95,22 @@ class WebCamTracker(EyeTracker):
 		# If a new frame wasn't available, return None.
 		else:
 			return ret, None
+	
+	def _close(self):
+		
+		"""Closes the connection to the OpenCV VideoCapture.
+		"""
+
+		# DEBUG message.
+		_message(u'debug', u'webcam.WebCamTracker.close', \
+			u"Disconnecting from webcam.")
+
+		# Release the video capture from the current webcam.
+		self._vidcap.release()
+
+		# DEBUG message.
+		_message(u'debug', u'webcam.WebCamTracker.close', \
+			u"Successfully disconnected from webcam.")
 
 
 # # # # #
