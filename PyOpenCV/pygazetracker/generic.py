@@ -774,7 +774,7 @@ def _crop_face(frame, face_cascade, minsize=(30, 30)):
 			_AX[0][0].add_patch(patches.Rectangle( \
 				(r[0],r[1]), r[2], r[3], fill=False, linewidth=1))
 		_AX[0][0].add_patch(patches.Rectangle( \
-			(r[0],r[1]), r[2], r[3], fill=False, linewidth=3))
+			(x,y), w, h, fill=False, linewidth=3))
 	
 	# Return the cropped frame.
 	return success, frame[y:y+h, x:x+w]
