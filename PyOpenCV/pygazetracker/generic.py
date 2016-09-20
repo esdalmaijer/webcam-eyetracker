@@ -40,10 +40,11 @@ class EyeTracker:
 	series of images.
 	"""
 	
-	def __init__(self, logfile=u'default', facedetect=True, pupthreshold=50,
-		glintthreshold=200, glintdetect=True, pupsizemode=u'diameter', \
-		minfacesize=(30,30), Lexpect=(0.7,0.4), Rexpect=(0.3,0.4), \
-		maxpupdist=0.2, maxpupsize=0.3, maxcpu=6, **kwargs):
+	def __init__(self, logfile=u'default', facedetect=True, eyedetect=True, \
+		pupthreshold=50, glintthreshold=200, glintdetect=True, \
+		pupsizemode=u'diameter', minfacesize=(30,30), Lexpect=(0.7,0.4), \
+		Rexpect=(0.3,0.4), maxpupdist=0.2, maxpupsize=0.3, maxcpu=6, \
+		**kwargs):
 		
 		"""Initialises an EyeTracker class.
 		
@@ -134,6 +135,8 @@ class EyeTracker:
 		# Face detection yes/no, and from what size.
 		self._facedetect = facedetect
 		self._minfacesize = minfacesize
+		# Face eye yes/no.
+		self._eyedetect = eyedetect
 		# Eye detection settings. These are relative positions of where
 		# each eye is expected to be in a frame, how far away detected eyes
 		# are allowed to be from the expected locations, and how large the
@@ -194,7 +197,7 @@ class EyeTracker:
 		for i in range(1, cpus):
 			p = Process(target=_frame_processer, \
 				args=[self._alive, self._framequeue, self._samplequeue, \
-				self._pupt, self._glit, self._facedetect, \
+				self._pupt, self._glit, self._facedetect, self._eyedetect, \
 				self._minfacesize, self._Lexpect, self._Rexpect, \
 				self._maxpupdist, self._maxpupsize, self._glintdetect, \
 				self._pupsizemode])
@@ -620,8 +623,8 @@ class EyeTracker:
 # process the webcam's image.
 
 def _frame_processer(event, framequeue, samplequeue, pupthreshold, \
-	glintthreshold, facedetect, minfacesize, Lexpect, Rexpect, maxpupdist, \
-	maxpupsize, glintdetect, pupsizemode):
+	glintthreshold, facedetect, eyedetect, minfacesize, Lexpect, Rexpect, \
+	maxpupdist, maxpupsize, glintdetect, pupsizemode):
 	
 	"""Continuously obtains frames from the framequeue, processes them into
 	samples, and puts those samples in the samplequeue.
@@ -659,9 +662,9 @@ def _frame_processer(event, framequeue, samplequeue, pupthreshold, \
 		
 			# Process the frame to get a sample.
 			LR = _get_sample(frame, pupthreshold, glintthreshold, \
-				face_cascade, eye_cascade, facedetect, minfacesize, \
-				Lexpect, Rexpect, maxpupdist, maxpupsize, glintdetect, \
-				pupsizemode)
+				face_cascade, eye_cascade, facedetect, eyedetect, \
+				minfacesize, Lexpect, Rexpect, maxpupdist, maxpupsize, \
+				glintdetect, pupsizemode)
 			
 			# Put the sample in the Queue. The Queue should
 			# handle locking internally, so we don't have to worry about
@@ -670,8 +673,8 @@ def _frame_processer(event, framequeue, samplequeue, pupthreshold, \
 
 
 def _get_sample(frame, pupthreshold, glintthreshold, face_cascade, \
-	eye_cascade, facedetect, minfacesize, Lexpect, Rexpect, maxpupdist, \
-	maxpupsize, glintdetect, pupsizemode):
+	eye_cascade, facedetect, eyedetect, minfacesize, Lexpect, Rexpect, \
+	maxpupdist, maxpupsize, glintdetect, pupsizemode):
 	
 	"""Gets a new frame from the input, and processes that through the
 	standard pipeline of optional face detection, eye detection, and
@@ -704,9 +707,12 @@ def _get_sample(frame, pupthreshold, glintthreshold, face_cascade, \
 	# Optionally do face detection.
 	if facedetect:
 		success, frame = _crop_face(frame, face_cascade, minfacesize)
-	# Detect the eye(s) in a frame
-	success, eyes = _crop_eyes(frame, eye_cascade, Lexpect=Lexpect, \
-		Rexpect=Rexpect, maxdist=maxpupdist, maxsize=maxpupsize)
+	# Optionally detect the eye(s) in a frame
+	if eyedetect:
+		success, eyes = _crop_eyes(frame, eye_cascade, Lexpect=Lexpect, \
+			Rexpect=Rexpect, maxdist=maxpupdist, maxsize=maxpupsize)
+	else:
+		eyes = [frame, None]
 	# Detect the pupils (and optionally the glint) in the eyes.
 	LR = _find_pupils(eyes[0], eyes[1], pupthreshold=pupthreshold, \
 		glintthreshold=glintthreshold, glint=glintdetect, mode=pupsizemode)
@@ -740,7 +746,7 @@ def _crop_face(frame, face_cascade, minsize=(30, 30)):
 	"""
 	
 	# Return straight away when frame==None
-	if frame == None:
+	if frame is None:
 		return False, None
 	
 	# Find all potential faces in the frame.
@@ -841,7 +847,7 @@ def _crop_eyes(facecrop, eye_cascade, Lexpect=(0.7,0.4), Rexpect=(0.3,0.4), \
 	"""
 	
 	# Return straight away when facecrop==None
-	if facecrop == None:
+	if facecrop is None:
 		return False, [None, None]
 	
 	# DETECT THE EYES
@@ -898,10 +904,10 @@ def _crop_eyes(facecrop, eye_cascade, Lexpect=(0.7,0.4), Rexpect=(0.3,0.4), \
 	# RETURN CROPPED EYES
 	# If no eye was detected, return no success.
 	success = True
-	if (li == None) & (ri == None):
+	if (li is None) & (ri is None):
 		success = False
 	# If the left eye was detected, crop it from the face.
-	if li == None:
+	if li is None:
 		left = None
 	else:
 		x, y, w, h = eyes[li]
@@ -909,7 +915,7 @@ def _crop_eyes(facecrop, eye_cascade, Lexpect=(0.7,0.4), Rexpect=(0.3,0.4), \
 		h /= 2
 		left = facecrop[y:y+h, x:x+w]
 	# If the right eye was detected, crop it from the face.
-	if ri == None:
+	if ri is None:
 		right = None
 	else:
 		x, y, w, h = eyes[ri]
@@ -992,7 +998,7 @@ def _find_pupils(left, right, pupthreshold=50, glintthreshold=200, \
 	B = numpy.zeros((2, 5))
 	i = 0
 	for eyeimg in [left, right]:
-		if eyeimg == None:
+		if eyeimg is None:
 			B[i,:] *= numpy.NaN
 		else:
 			B[i,:] = _process_eye_image(eyeimg, \
@@ -1130,12 +1136,30 @@ def _process_eye_image(eyeimg, pupthreshold=50, glintthreshold=200, \
 					img[:,:,1][pup==1] = img[:,:,1][pup==1]/2
 					img[:,:,2][pup==1] = img[:,:,2][pup==1]/2 + 255/2
 					# Display the detected pupil in the right
-					# top/bottom pane.
+					# top/bottom pane. (Only when the glint is not
+					# to be marked.)
+					if not glint:
+						_AX[debugindex][2].imshow(img)
+						_AX[debugindex][2].set_title("detected pupil")
+						# Draw a green rectangle around the pupil.
+						_AX[debugindex][2].add_patch(patches.Rectangle( \
+							(x-1, y-1), v['ps']+2, h+2, \
+							edgecolor=(0,1,0), fill=False, linewidth=1))
+				# In DEBUG mode, colour the detected glint, and draw a
+				# draw a frame around it.
+				if _DEBUG and glint and m == 'g':
+					# Colour the thresholded glint red.
+					img[:,:,0][pup==1] = img[:,:,0][pup==1]/2 + 255/2
+					img[:,:,1][pup==1] = img[:,:,1][pup==1]/2
+					img[:,:,2][pup==1] = img[:,:,2][pup==1]/2
+					# Display the detected pupil and glint in the
+					# right top/bottom pane.
 					_AX[debugindex][2].imshow(img)
 					_AX[debugindex][2].set_title("detected pupil")
 					# Draw a green rectangle around the pupil.
 					_AX[debugindex][2].add_patch(patches.Rectangle( \
-						(x-1,y-1), v['ps']+2, h+2, edgecolor=(0,1,0),
+						(v['px']-v['ps']/2-1, v['py']-v['ps']/2-1), \
+						v['ps']+2, v['ps']+2, edgecolor=(0,1,0),
 						fill=False, linewidth=1))
 	
 	return v['px'], v['py'], v['ps'], v['gx'], v['gy']

@@ -3,6 +3,7 @@
 from __init__ import _message
 from generic import EyeTracker
 
+import os
 import cv2
 import PIL
 import numpy
@@ -13,13 +14,13 @@ import numpy
 #
 # A function that sets up the WebCam EyeTracker.
 
-def setup(camnr=0, mode=u'RGB', **kwargs):
+def setup(imgdir=None, mode=u'RGB', **kwargs):
 	
-	"""
+	"""Sets up an ImageTracker instance with a GUI.
 	"""
 	
 	# Open WebCamTracker.
-	tracker = WebCamTracker(camnr=camnr, mode=mode, **kwargs)
+	tracker = ImageTracker(imgdir=imgdir, mode=mode, **kwargs)
 	
 	# OpenCV keycodes on Windows.
 	# TODO: Put these in a dict, and handle their purpose through a separate function.
@@ -78,23 +79,28 @@ def setup(camnr=0, mode=u'RGB', **kwargs):
 
 
 # # # # #
-# WEBCAM EYE-TRACKER
+# IMAGE EYE-TRACKER
 #
-# A class for tracking pupils and (optionally) glints in a webcam stream
-# obtained through OpenCV.
+# A class for tracking pupils and (optionally) glints in an existing set of
+# images stored in one directory.
 
-class WebCamTracker(EyeTracker):
+class ImageTracker(EyeTracker):
 	
-	"""OpenCV implementation of a webcam eye-tracker.
+	"""OpenCV implementation of an eye-tracker for existing images.
 	"""
 	
-	def connect(self, camnr=0, mode=u'RGB', **kwargs):
+	def connect(self, imgdir=None, mode=u'RGB', **kwargs):
 		
 		"""Use this function to implement the initialisation of a specific
 		type of eye tracking.
 		
-		camnr			-	Integer that indicates what webcam should be
-						used. Default = 0.
+		imgdir		-	String that is a path to the directory that
+						contains the images of eyes. The names in
+						the frame directory will be sorted, and are
+						thus expected to be in a sortable format;
+						for example '00000001.png', '00000002.png',
+						etc. If None is passed, an Exception will be
+						raised. Default = None.
 		
 		mode			-	String that indicates how the captured frame
 						should be processed before it's returned.
@@ -109,25 +115,35 @@ class WebCamTracker(EyeTracker):
 		if not self._connected:
 			
 			# Set mode and camera number
-			self._camnr = camnr
+			self._imgdir = imgdir
 			self._mode = mode
 
 			# DEBUG message.
-			_message(u'debug', u'webcam.WebCamTracker.connect', \
-				u"Connecting to webcam %d." % (self._camnr))
+			_message(u'debug', u'images.ImageTracker.connect', \
+				u"Checking directory %s." % (self._imgdir))
 		
-			# Initialise the webcam.
-			self._vidcap = cv2.VideoCapture(self._camnr)
+			# Check whether the directory exists.
+			if self._imgdir == None:
+				_message(u'error', u'images.ImageTracker.connect', \
+					u"No directory specified; use the imgdir keyword to pass the path to a directory with eye images.")
+			if not os.path.isdir(self._imgdir):
+				_message(u'error', u'images.ImageTracker.connect', \
+					u"Image directory does not exist ('%s')" \
+					% (self._imgdir))
+			self._framenames = os.listdir(self._imgdir)
+			self._framenames.sort()
+			self._framenr = 0
+			self._nframes = len(self._framenames)
 			self._connected = True
 
 			# DEBUG message.
-			_message(u'debug', u'webcam.WebCamTracker.connect', \
-				u"Successfully connected to webcam %d!" % (self._camnr))
+			_message(u'debug', u'images.ImageTracker.connect', \
+				u"Successfully connected to directory %s!" % (self._imgdir))
 
 	
 	def _get_frame(self):
 		
-		"""Reads the next frame from the active OpenCV VideoCapture.
+		"""Reads the next frame from the image directory.
 		
 		Keyword Arguments
 		
@@ -141,11 +157,29 @@ class WebCamTracker(EyeTracker):
 						obtained, None will be returned.
 		"""
 		
-		# Take a photo with the webcam.
-		# (ret is the return value: True if everything went ok, False if
-		# there was a problem. frame is the image taken from the webcam as
-		# a NumPy ndarray, where the image is coded as BGR
-		ret, frame = self._vidcap.read()
+		# Check if there is a next image. If there isn't, disconnect.
+		if self._framenr >= self._nframes:
+			ret = False
+			self._connected = False
+		# Load the next image.
+		else:
+			# Construct the path to the current image.
+			framepath = os.path.join(self._imgdir, \
+				self._framenames[self._framenr])
+			# Use OpenCV to load the image. This will return a numerical
+			# representation of the image in BGR format. It can also
+			# return None if imread fails.
+			frame = cv2.imread(framepath)
+			# If no image was read, set the return value to False. If
+			# an image was loaded, the return value should be True, which
+			# will allow further processing.
+			if frame is None:
+				ret = False
+			else:
+				ret = True
+			# Increase the frame counter by one, so that next time this
+			# function is called, the next image will be loaded.
+			self._framenr += 1
 		
 		# If a new frame was available, proceed to process and return it.		
 		if ret:
@@ -173,19 +207,13 @@ class WebCamTracker(EyeTracker):
 	
 	def _close(self):
 		
-		"""Closes the connection to the OpenCV VideoCapture.
+		"""Doesn't really do anything, but is implemented for consistency's
+		sake.
 		"""
 
 		# DEBUG message.
-		_message(u'debug', u'webcam.WebCamTracker.close', \
-			u"Disconnecting from webcam.")
-
-		# Release the video capture from the current webcam.
-		self._vidcap.release()
-
-		# DEBUG message.
-		_message(u'debug', u'webcam.WebCamTracker.close', \
-			u"Successfully disconnected from webcam.")
+		_message(u'debug', u'images.ImageTracker.close', \
+			u"Closed connection.")
 
 
 # # # # #
@@ -203,6 +231,7 @@ if __name__ == u'__main__':
 	MODE = 'B'
 	DUMMY = True
 	DEBUG = False
+	IMGDIR = './example'
 
 	# In DUMMY mode, load an existing image (useful for quick debugging).
 	if DUMMY:
@@ -224,7 +253,7 @@ if __name__ == u'__main__':
 	# If not in DUMMY mode, obtain a frame through the _get_frame method.
 	else:
 		# Initialise a new tracker instance.
-		tracker = WebCamTracker(camnr=0, mode=MODE, debug=DEBUG)
+		tracker = ImageTracker(imgdir=IMGDIR, mode=MODE, debug=DEBUG)
 		# Get a single frame.
 		success = False
 		while not success:
