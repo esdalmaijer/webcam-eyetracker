@@ -755,7 +755,7 @@ def _crop_face(frame, face_cascade, minsize=(30, 30)):
 		scaleFactor=1.1,
 		minNeighbors=5,
 		minSize=minsize,
-		flags = cv2.cv.CV_HAAR_SCALE_IMAGE
+		flags = cv2.CASCADE_SCALE_IMAGE
 		)
 	
 	# Find out what the largest face is (this is assumed to be the
