@@ -25,7 +25,7 @@ try:
   vcAvailable = True
   import VideoCapture
 except ImportError:
-  print "VideoCapture module not available"
+  print ("VideoCapture module not available")
 
 try:
 	import pygame
