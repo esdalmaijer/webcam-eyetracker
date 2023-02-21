@@ -19,7 +19,7 @@ _DEBUG = False
 
 # FILES AND FOLDERS
 # Get the main directory
-_DIR = os.path.abspath(os.path.dirname(__file__)).decode(u'utf-8')
+_DIR = os.path.abspath(os.path.dirname(__file__))
 # Get the directory for DEBUG images.
 _DEBUGDIR = os.path.join(_DIR, 'DEBUG')
 # Face detection cascade from:
