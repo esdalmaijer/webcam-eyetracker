@@ -1,0 +1,14 @@
+ Requirements:
+ Anaconda (only needed if you don't want to install python and setup your whole system)
+ Python
+ PyGame
+ OpenCV
+ 
+ 
+ How to run:
+ 1-Clone the repository into your local machine: git clone https://github.com/esdalmaijer/webcam-eyetracker.git
+ 
+ 2-After cloning the repository to your local machine run the command to get into the repository, for example: cd webcam-eyetracker
+ 
+ 3-Once you're inside the repository you have 2 options, you can either run the code with PyGame by running the following command: python PyGame/GUItest.py
+ Or the other option is to run the code with OpenCV by running the following command: python PyOpenCV/example.py
